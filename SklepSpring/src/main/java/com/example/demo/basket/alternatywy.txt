@@ -1,0 +1,158 @@
+Aby nie mieszać w projekcie, różne "alternatywne podejścia" do koszyka i sesji zapiszę w pliku tekstowym.
+
+1) Wstrzyknięcie HttpSession z serwletów (ewentualnie można też HttpServletRequest i z niego pobrać)
+
+    @GetMapping("/{id}/add-to-basket")
+    public String addToBasket(Model model,
+            @PathVariable("id") Integer productId,
+            HttpSession httpSession) {
+        Optional<Product> maybeProduct = repository.findById(productId);
+        if(maybeProduct.isPresent()) {
+            Basket basket = (Basket) httpSession.getAttribute("basket");
+            if(basket == null) {
+                basket = new Basket();
+                httpSession.setAttribute("basket", basket);
+            }
+            basket.incrementProduct(maybeProduct.get());
+        }
+        
+        return "redirect:/products";
+    }
+
+ 
+2) Analogiczne możliwości daje WebRequest ze springa
+    @GetMapping("/{id}/add-to-basket")
+    public String addToBasket(Model model,
+            @PathVariable("id") Integer productId,
+            WebRequest webRequest
+            ) {
+        Optional<Product> maybeProduct = repository.findById(productId);
+        if(maybeProduct.isPresent()) {
+            Basket basket = (Basket) webRequest.getAttribute("basket", WebRequest.SCOPE_SESSION);
+            
+            if(basket == null) {
+                basket = new Basket();
+                webRequest.setAttribute("basket", basket, WebRequest.SCOPE_SESSION);
+            }
+            basket.incrementProduct(maybeProduct.get());
+        }
+        
+        return "redirect:/products";
+    }
+ 
+3) Zamiast if(basket == null), można zdefiniować @Bean-a typu HttpSessionListener (jak w technologii serwletów)
+i w nim zainicjować sesję. Do inicjalizacji dojdzie, gdy jakaś pierwsza metoda wstrzyknie sobie HttpSession lub w inny sposó” odwoła się do sesji.
+ 
+
+@Configuration
+public class BasketConfiguration {
+    @Bean
+    public HttpSessionListener createSessionListener() {
+        return new HttpSessionListener() {
+            @Override
+            public void sessionCreated(HttpSessionEvent se) {
+                HttpSession session = se.getSession();
+                System.out.println("tworzę sesję nr " + session.getId());
+                session.setAttribute("basket", new Basket());
+            }
+            
+            @Override
+            public void sessionDestroyed(HttpSessionEvent se) {
+                HttpSession session = se.getSession();
+                System.out.println("koniec sesji nr " + session.getId());
+            }
+        };
+    }
+}
+
+a w kontrolerze:
+    @GetMapping("/{id}/add-to-basket")
+    public String addToBasket(Model model,
+            @PathVariable("id") Integer productId,
+            HttpSession session) {
+        Optional<Product> maybeProduct = repository.findById(productId);
+        if(maybeProduct.isPresent()) {
+            Basket basket = (Basket) session.getAttribute("basket");
+            basket.incrementProduct(maybeProduct.get());
+        }
+        
+        return "redirect:/products";
+    }
+
+4) Ta wersja zostaje w projekcie za stałe.
+Obiekt z sesji można wstrzyknąć bezpośrednio jako parametr, używając @SessionAttribute.
+Niestety, samo użycie tej adnotacji nie wyzwala inicjalizacji sesji opisanej w punkcie 3),
+daje tylko dostęp do atrybutu sesji jeśli on już wcześniej istnieje.
+W przypadku naszej aplikacji sesja inicjalizuje się, gdy wyświetlana jest główna strona z produktami (w zasadzie dokonuje tego JSP),
+ale czasami może być konieczne dodanie parametru HttpSession do metody, tylko po to, aby wymusić inicjalizcję sesji.
+ 
+    @GetMapping("/{id}/add-to-basket")
+    public String addToBasket(Model model,
+            @PathVariable("id") Integer productId,
+            @SessionAttribute Basket basket) {
+        Optional<Product> maybeProduct = repository.findById(productId);
+        if(maybeProduct.isPresent()) {
+            basket.incrementProduct(maybeProduct.get());
+        }
+        
+        return "redirect:/products";
+    }
+    
+
+5) Alternatywnie można zdefiniować "bean-a w zakresie sesji" i wstrzyknąć do w kontrolerze za pomocą @Autowired.
+Jeśli w miejscu wstrzyknięcia używamy nazwy klasy (a nie interfejsu), to należy dodatkowo ustawić proxy na "target class". W innych sytuacjach mogą działać inne opcje.
+ 
+@Component
+@Scope(scopeName="session", proxyMode=ScopedProxyMode.TARGET_CLASS)
+public class BasketBean {
+    private Map<Integer, ProductInBasket> products = new TreeMap<>();
+    
+    public Collection<ProductInBasket> getProducts() {
+        return Collections.unmodifiableCollection(products.values());
+    }
+
+    public void incrementProduct(Product product) {
+        if(products.containsKey(product.getProductId())) {
+            ProductInBasket pib = products.get(product.getProductId());
+            pib.increment(1);
+        } else {
+            ProductInBasket pib = new ProductInBasket();
+            pib.setProductId(product.getProductId());
+            pib.setName(product.getName());
+            pib.setPrice(product.getPrice());
+            pib.setCount(1);
+            products.put(pib.getProductId(), pib);
+        }
+    }
+    
+    public BigDecimal getBasketValue() {
+        return products.values().stream()
+            .map(ProductInBasket::getValue)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+}
+
+a w kontrolerze:
+    @Autowired
+    private BasketBean basket;
+
+    @GetMapping
+    public String allProducts(Model model) {
+        List<Product> products = repository.findAll();
+        model.addAttribute("products", products);
+        model.addAttribute("basket", basket); // !!!
+        return "products";
+    }
+
+    @GetMapping("/{id}/add-to-basket")
+    public String addToBasket(@PathVariable("id") Integer productId) {
+        Optional<Product> maybeProduct = repository.findById(productId);
+        if(maybeProduct.isPresent()) {
+            basket.incrementProduct(maybeProduct.get());
+        }
+        
+        return "redirect:/products";
+    }
+
+ 
+

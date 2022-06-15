@@ -1,0 +1,1 @@
+[{"autor":"DE BARBARO NATALIA","tytul":"CZUŁA PRZEWODNICZKA","rokWydania":"2021"},{"autor":"MRÓZ REMIGIUSZ","tytul":"WYBACZAM CI","rokWydania":"2020"},{"autor":"TURECKI KAMIL","tytul":"PRZERWANE MILCZENIE","rokWydania":"2021"},{"autor":"SILVERA ADAM","tytul":"NASZ OSTATNI DZIEŃ","rokWydania":"2019"},{"autor":"MRÓZ REMIGIUSZ","tytul":"EGZEKUCJA","rokWydania":"2020"}]

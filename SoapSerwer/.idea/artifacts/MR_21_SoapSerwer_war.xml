@@ -1,0 +1,14 @@
+<component name="ArtifactManager">
+  <artifact type="war" name="MR-21-SoapSerwer:war">
+    <output-path>$PROJECT_DIR$/target</output-path>
+    <properties id="maven-jee-properties">
+      <options>
+        <module>MR-21-SoapSerwer</module>
+        <packaging>war</packaging>
+      </options>
+    </properties>
+    <root id="archive" name="MR-21-SoapSerwer-1.0.war">
+      <element id="artifact" artifact-name="MR-21-SoapSerwer:war exploded" />
+    </root>
+  </artifact>
+</component>
